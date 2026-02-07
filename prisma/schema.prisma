@@ -1,0 +1,107 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RoleName {
+  ADMIN
+  HR
+  EMPLOYEE
+}
+
+model Roles {
+  id    Int      @id @default(autoincrement())
+  name  RoleName @unique
+  users Users[]
+}
+
+model Offices {
+  id        Int       @id @default(autoincrement())
+  name      String
+  address   String
+  latitude  Decimal   @db.Decimal(10, 8)
+  longitude Decimal   @db.Decimal(11, 8)
+  radius    Int
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  users     Users[]
+}
+
+model Users {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  password  String
+  fullName  String
+  phone     String?
+  roleId    Int
+  officeId  Int?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  role                Roles                 @relation(fields: [roleId], references: [id])
+  office              Offices?              @relation(fields: [officeId], references: [id])
+  attendances         Attendances[]
+  attendanceApprovals AttendanceApprovals[]
+}
+
+enum AttendanceType {
+  CLOCK_IN
+  CLOCK_OUT
+}
+
+enum AttendanceStatus {
+  WITH_RANGE
+  OUT_OF_RANGE
+  REJECTED
+  APPROVED
+}
+
+model Attendances {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  type      AttendanceType
+  timestamp DateTime         @default(now())
+  latitude  Decimal?         @db.Decimal(10, 8)
+  longitude Decimal?         @db.Decimal(11, 8)
+  status    AttendanceStatus
+  photo_url String
+  notes     String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  deletedAt DateTime?
+
+  user                Users                 @relation(fields: [userId], references: [id])
+  attendanceApprovals AttendanceApprovals[]
+}
+
+enum AttendanceApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AttendanceApprovals {
+  id           Int                      @id @default(autoincrement())
+  attendanceId Int
+  approverId   Int
+  status       AttendanceApprovalStatus
+  reviewedAt   DateTime?
+  reviewNotes  String?
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  attendance Attendances @relation(fields: [attendanceId], references: [id])
+  approver   Users       @relation(fields: [approverId], references: [id])
+}
