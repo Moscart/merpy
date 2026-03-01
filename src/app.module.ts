@@ -4,7 +4,7 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 import { CommonModule } from './common/common.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-import { UsersModule } from './users/users.module';
+import { UsersModule } from './module/users/users.module';
 
 @Module({
   imports: [CommonModule, UsersModule],
