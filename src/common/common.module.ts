@@ -1,15 +1,20 @@
+import { RedisModule } from '@liaoliaots/nestjs-redis';
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
-import { validate } from './configs/env.validation';
+import { CacheService } from './cache/cache.service';
+import appConfig from './configs/app.config';
+import jwtConfig from './configs/jwt.config';
+import redisConfig from './configs/redis.config';
 import { PrismaService } from './database/prisma.service';
+
 @Global()
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      validate,
+      load: [appConfig, jwtConfig, redisConfig],
       cache: true,
     }),
     ThrottlerModule.forRoot({
@@ -22,18 +27,26 @@ import { PrismaService } from './database/prisma.service';
     }),
     LoggerModule.forRoot({
       pinoHttp: {
-        transport:
-          process.env.NODE_ENV !== 'production'
-            ? {
-                target: 'pino-pretty',
-                options: { colorize: true, singleLine: true },
-              }
-            : undefined,
+        name: 'Merpy',
+        transport: {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            singleLine: true,
+          },
+        },
         level: process.env.NODE_ENV !== 'production' ? 'debug' : 'info',
       },
     }),
+    RedisModule.forRoot({
+      config: {
+        host: process.env.REDIS_HOST,
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+        password: process.env.REDIS_PASSWORD,
+      },
+    }),
   ],
-  providers: [PrismaService],
-  exports: [PrismaService],
+  providers: [PrismaService, CacheService],
+  exports: [PrismaService, CacheService],
 })
 export class CommonModule {}

@@ -4,10 +4,12 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 import { CommonModule } from './common/common.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { AuthModule } from './module/auth/auth.module';
+import { SessionsModule } from './module/sessions/sessions.module';
 import { UsersModule } from './module/users/users.module';
 
 @Module({
-  imports: [CommonModule, UsersModule],
+  imports: [CommonModule, AuthModule, SessionsModule, UsersModule],
   controllers: [],
   providers: [
     {
