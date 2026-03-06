@@ -1,8 +1,8 @@
-import { Body, HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'src/common/database/prisma.service';
-import { ERRORS } from 'src/constants/errors';
+import { ERRORS } from './constants/errors';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
@@ -12,19 +12,34 @@ export class UsersService {
 
   private defaultSelect: Prisma.UsersSelect = {
     id: true,
-    fullName: true,
+    companyId: true,
+    officeId: true,
+    departmentId: true,
+    scheduleId: true,
     email: true,
+    employeeCode: true,
+    username: true,
+    fullName: true,
     phone: true,
     role: true,
-    office: true,
+    profileUrl: true,
+    jobTitle: true,
+    isFlexible: true,
+    status: true,
+    joinedAt: true,
+    createdAt: true,
   };
 
-  async create(@Body() createUserDto: CreateUserDto) {
-    const { email, password } = createUserDto;
+  async create(createUserDto: CreateUserDto) {
+    const { companyId, password, employeeCode } = createUserDto;
+    const email = createUserDto.email.toLowerCase();
+    const username = createUserDto.username.toLowerCase();
 
-    const isUserEmailExist = await this.prismaService.users.findUnique({
+    const isUserEmailExist = await this.prismaService.users.findFirst({
       where: {
+        companyId: companyId,
         email: email,
+        deletedAt: null,
       },
     });
 
@@ -32,15 +47,40 @@ export class UsersService {
       throw new HttpException(ERRORS.EMAIL_ALREADY_EXISTS, 400);
     }
 
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    const isUserUsernameExist = await this.prismaService.users.findFirst({
+      where: {
+        companyId: companyId,
+        username: username,
+        deletedAt: null,
+      },
+    });
+
+    if (isUserUsernameExist) {
+      throw new HttpException(ERRORS.USERNAME_ALREADY_EXISTS, 400);
+    }
+
+    if (employeeCode) {
+      const isUserEmployeeCodeExist = await this.prismaService.users.findFirst({
+        where: {
+          companyId: companyId,
+          employeeCode: employeeCode,
+          deletedAt: null,
+        },
+      });
+
+      if (isUserEmployeeCodeExist) {
+        throw new HttpException(ERRORS.EMPLOYEE_CODE_ALREADY_EXISTS, 400);
+      }
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     const user = await this.prismaService.users.create({
       data: {
         ...createUserDto,
-        email: email.toLowerCase(),
+        email: email,
         password: hashedPassword,
-        roleId: 3,
+        username: username,
       },
       select: this.defaultSelect,
     });
@@ -49,35 +89,27 @@ export class UsersService {
 
   async findAll() {
     const users = await this.prismaService.users.findMany({
+      where: {
+        deletedAt: null,
+      },
       select: this.defaultSelect,
     });
     return users;
   }
 
-  async findOne(id: number) {
-    const user = await this.prismaService.users.findUnique({
-      where: { id },
+  async findOne(id: string) {
+    const user = await this.prismaService.users.findFirst({
+      where: { id, deletedAt: null },
       select: this.defaultSelect,
     });
     return user;
   }
 
-  async findOneByEmail(email: string) {
-    const user = await this.prismaService.users.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        password: true,
-      },
-    });
-    return user;
-  }
-
-  async update(id: number, updateUserDto: UpdateUserDto) {
-    const getUser = await this.prismaService.users.findUnique({
+  async update(id: string, updateUserDto: UpdateUserDto) {
+    const getUser = await this.prismaService.users.findFirst({
       where: {
         id,
+        deletedAt: null,
       },
     });
 
@@ -85,18 +117,79 @@ export class UsersService {
       throw new HttpException(ERRORS.USER_NOT_FOUND, 404);
     }
 
+    if (updateUserDto.email) {
+      const email = updateUserDto.email.toLowerCase();
+      const isUserEmailExist = await this.prismaService.users.findFirst({
+        where: {
+          companyId: getUser.companyId,
+          email: email,
+          deletedAt: null,
+          NOT: {
+            id: id,
+          },
+        },
+      });
+
+      if (isUserEmailExist) {
+        throw new HttpException(ERRORS.EMAIL_ALREADY_EXISTS, 400);
+      }
+    }
+
+    if (updateUserDto.username) {
+      const username = updateUserDto.username.toLowerCase();
+      const isUserUsernameExist = await this.prismaService.users.findFirst({
+        where: {
+          companyId: getUser.companyId,
+          username: username,
+          deletedAt: null,
+          NOT: {
+            id: id,
+          },
+        },
+      });
+
+      if (isUserUsernameExist) {
+        throw new HttpException(ERRORS.USERNAME_ALREADY_EXISTS, 400);
+      }
+    }
+
+    if (updateUserDto.employeeCode) {
+      const isUserEmployeeCodeExist = await this.prismaService.users.findFirst({
+        where: {
+          companyId: getUser.companyId,
+          employeeCode: updateUserDto.employeeCode,
+          deletedAt: null,
+          NOT: {
+            id: id,
+          },
+        },
+      });
+
+      if (isUserEmployeeCodeExist) {
+        throw new HttpException(ERRORS.EMPLOYEE_CODE_ALREADY_EXISTS, 400);
+      }
+    }
+
+    const updateData = { ...updateUserDto };
+
+    // Hash password if the user wants to update it
+    if (updateData.password) {
+      updateData.password = await bcrypt.hash(updateData.password, 12);
+    }
+
     const updatedUser = await this.prismaService.users.update({
       where: { id },
-      data: { ...updateUserDto },
+      data: updateData,
       select: this.defaultSelect,
     });
     return updatedUser;
   }
 
-  async remove(id: number) {
-    const getUser = await this.prismaService.users.findUnique({
+  async remove(id: string) {
+    const getUser = await this.prismaService.users.findFirst({
       where: {
         id,
+        deletedAt: null,
       },
     });
 
@@ -104,9 +197,10 @@ export class UsersService {
       throw new HttpException(ERRORS.USER_NOT_FOUND, 404);
     }
 
-    await this.prismaService.users.delete({
-      where: {
-        id,
+    await this.prismaService.users.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
       },
     });
     return {
