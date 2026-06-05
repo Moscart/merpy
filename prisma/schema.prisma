@@ -210,9 +210,10 @@ model AttendanceRequests {
 }
 
 model Schedules {
-  id        String @id @default(uuid(7)) @db.Uuid
-  companyId String @db.Uuid
+  id        String  @id @default(uuid(7)) @db.Uuid
+  companyId String  @db.Uuid
   name      String
+  isDefault Boolean @default(false)
 
   company Companies @relation(fields: [companyId], references: [id])
 

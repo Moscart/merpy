@@ -14,6 +14,7 @@ export const ScheduleResponseSchema = z.object({
   id: z.uuidv7(),
   companyId: z.uuidv7(),
   name: z.string().min(2).max(100),
+  isDefault: z.boolean(),
   scheduleDays: z.array(ScheduleDayResponseSchema),
 });
 

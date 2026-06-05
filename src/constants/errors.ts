@@ -32,4 +32,5 @@ export const ERRORS = {
   // Schedules
   SCHEDULE_NOT_FOUND: 'Schedule not found',
   SCHEDULE_IN_USE: 'Schedule is still in use and cannot be deleted',
+  SCHEDULE_IS_DEFAULT: 'Default schedule cannot be deleted',
 };

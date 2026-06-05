@@ -193,6 +193,7 @@ export class AuthService {
       await tx.schedules.create({
         data: {
           name: 'Default Schedule',
+          isDefault: true,
           companyId: users.companyId,
           scheduleDays: {
             createMany: {

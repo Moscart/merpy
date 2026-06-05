@@ -6,33 +6,13 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/common/database/prisma.service';
-import { CreateScheduleDto } from './dto/create-schedule.dto';
+import { ERRORS } from 'src/constants/errors';
+import {
+  CreateScheduleDto,
+  type ScheduleDayInput,
+} from './dto/create-schedule.dto';
 import { ScheduleQueryDto } from './dto/pagination.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
-
-type ScheduleDayPayload = {
-  dayOfWeek:
-    | 'SUNDAY'
-    | 'MONDAY'
-    | 'TUESDAY'
-    | 'WEDNESDAY'
-    | 'THURSDAY'
-    | 'FRIDAY'
-    | 'SATURDAY';
-  clockIn: string;
-  clockOut: string;
-};
-
-type CreateSchedulePayload = {
-  name: string;
-  scheduleDays: ScheduleDayPayload[];
-};
-
-type UpdateSchedulePayload = Partial<CreateSchedulePayload>;
-
-const SCHEDULE_NOT_FOUND_MESSAGE = 'Schedule not found';
-const SCHEDULE_IN_USE_MESSAGE =
-  'Schedule is still in use and cannot be deleted';
 
 @Injectable()
 export class SchedulesService {
@@ -42,6 +22,7 @@ export class SchedulesService {
     id: true,
     companyId: true,
     name: true,
+    isDefault: true,
     scheduleDays: {
       select: {
         id: true,
@@ -61,7 +42,7 @@ export class SchedulesService {
     return `1970-01-01T${normalizedTime}Z`;
   }
 
-  private mapScheduleDaysCreateInput(scheduleDays: ScheduleDayPayload[]) {
+  private mapScheduleDaysCreateInput(scheduleDays: ScheduleDayInput[]) {
     return scheduleDays.map((scheduleDay) => ({
       dayOfWeek: scheduleDay.dayOfWeek,
       clockIn: this.toTimeDateTime(scheduleDay.clockIn),
@@ -70,7 +51,7 @@ export class SchedulesService {
   }
 
   async create(companyId: string, createScheduleDto: CreateScheduleDto) {
-    const { name, scheduleDays } = createScheduleDto as CreateSchedulePayload;
+    const { name, scheduleDays } = createScheduleDto;
 
     const schedule = await this.prismaService.schedules.create({
       data: {
@@ -158,8 +139,10 @@ export class SchedulesService {
     if (!schedule) {
       throw new NotFoundException({
         statusCode: HttpStatus.NOT_FOUND,
-        errorCode: 'SCHEDULE_NOT_FOUND',
-        message: SCHEDULE_NOT_FOUND_MESSAGE,
+        errorCode: Object.keys(ERRORS).find(
+          (key) => ERRORS[key] === ERRORS.SCHEDULE_NOT_FOUND
+        ),
+        message: ERRORS.SCHEDULE_NOT_FOUND,
       });
     }
 
@@ -171,9 +154,6 @@ export class SchedulesService {
     id: string,
     updateScheduleDto: UpdateScheduleDto
   ) {
-    const normalizedUpdateScheduleDto =
-      updateScheduleDto as UpdateSchedulePayload;
-
     const schedule = await this.prismaService.schedules.findFirst({
       where: {
         id,
@@ -184,28 +164,28 @@ export class SchedulesService {
     if (!schedule) {
       throw new NotFoundException({
         statusCode: HttpStatus.NOT_FOUND,
-        errorCode: 'SCHEDULE_NOT_FOUND',
-        message: SCHEDULE_NOT_FOUND_MESSAGE,
+        errorCode: Object.keys(ERRORS).find(
+          (key) => ERRORS[key] === ERRORS.SCHEDULE_NOT_FOUND
+        ),
+        message: ERRORS.SCHEDULE_NOT_FOUND,
       });
     }
 
     const data: Prisma.SchedulesUpdateInput = {};
 
-    if (normalizedUpdateScheduleDto.name !== undefined) {
-      data.name = normalizedUpdateScheduleDto.name;
+    if (updateScheduleDto.name !== undefined) {
+      data.name = updateScheduleDto.name;
     }
 
-    if (normalizedUpdateScheduleDto.scheduleDays !== undefined) {
+    if (updateScheduleDto.scheduleDays !== undefined) {
       data.scheduleDays = {
         deleteMany: {},
-        create: this.mapScheduleDaysCreateInput(
-          normalizedUpdateScheduleDto.scheduleDays
-        ),
+        create: this.mapScheduleDaysCreateInput(updateScheduleDto.scheduleDays),
       };
     }
 
     const updatedSchedule = await this.prismaService.schedules.update({
-      where: { id },
+      where: { id, companyId },
       data,
       select: this.defaultSelect,
     });
@@ -224,8 +204,20 @@ export class SchedulesService {
     if (!schedule) {
       throw new NotFoundException({
         statusCode: HttpStatus.NOT_FOUND,
-        errorCode: 'SCHEDULE_NOT_FOUND',
-        message: SCHEDULE_NOT_FOUND_MESSAGE,
+        errorCode: Object.keys(ERRORS).find(
+          (key) => ERRORS[key] === ERRORS.SCHEDULE_NOT_FOUND
+        ),
+        message: ERRORS.SCHEDULE_NOT_FOUND,
+      });
+    }
+
+    if (schedule.isDefault) {
+      throw new BadRequestException({
+        statusCode: HttpStatus.BAD_REQUEST,
+        errorCode: Object.keys(ERRORS).find(
+          (key) => ERRORS[key] === ERRORS.SCHEDULE_IS_DEFAULT
+        ),
+        message: ERRORS.SCHEDULE_IS_DEFAULT,
       });
     }
 
@@ -249,8 +241,10 @@ export class SchedulesService {
     if (usersCount > 0 || specialDatesCount > 0) {
       throw new BadRequestException({
         statusCode: HttpStatus.BAD_REQUEST,
-        errorCode: 'SCHEDULE_IN_USE',
-        message: SCHEDULE_IN_USE_MESSAGE,
+        errorCode: Object.keys(ERRORS).find(
+          (key) => ERRORS[key] === ERRORS.SCHEDULE_IN_USE
+        ),
+        message: ERRORS.SCHEDULE_IN_USE,
       });
     }
 
