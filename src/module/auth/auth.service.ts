@@ -92,6 +92,11 @@ export class AuthService {
       .update(token.refreshToken)
       .digest('hex');
 
+    const sessionDuration = dto.rememberMe
+      ? 30 * 24 * 60 * 60 * 1000
+      : 7 * 24 * 60 * 60 * 1000;
+    const expiresAt = new Date(Date.now() + sessionDuration);
+
     await this.prismaService.sessions.create({
       data: {
         userId: user.id,
@@ -99,24 +104,28 @@ export class AuthService {
         refreshToken: refreshTokenHash,
         userAgent,
         ipAddress,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        isRememberMe: !!dto.rememberMe,
+        expiresAt,
       },
     });
 
     await this.cacheService.set(
       `refresh_token:${user.id}:${deviceId}`,
       refreshTokenHash,
-      7 * 24 * 60 * 60
+      sessionDuration / 1000
     );
 
-    return token;
+    return {
+      ...token,
+      refreshTokenExpiresIn: sessionDuration,
+    };
   }
 
   async registerCompany(
     dto: RegisterDto,
     userAgent: string,
     ipAddress: string
-  ) {
+  ): Promise<TokenResponse> {
     const company = await this.prismaService.companies.findFirst({
       where: {
         code: dto.companyCode.toLowerCase(),
@@ -251,6 +260,9 @@ export class AuthService {
       .update(token.refreshToken)
       .digest('hex');
 
+    const sessionDuration = 7 * 24 * 60 * 60 * 1000;
+    const expiresAt = new Date(Date.now() + sessionDuration);
+
     await this.prismaService.sessions.create({
       data: {
         userId: registeredUser.id,
@@ -258,17 +270,21 @@ export class AuthService {
         refreshToken: refreshTokenHash,
         userAgent,
         ipAddress,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        isRememberMe: false,
+        expiresAt,
       },
     });
 
     await this.cacheService.set(
       `refresh_token:${registeredUser.id}:${deviceId}`,
       refreshTokenHash,
-      7 * 24 * 60 * 60
+      sessionDuration / 1000
     );
 
-    return token;
+    return {
+      ...token,
+      refreshTokenExpiresIn: sessionDuration,
+    };
   }
 
   async refresh(
@@ -291,26 +307,46 @@ export class AuthService {
       .update(token.refreshToken)
       .digest('hex');
 
-    await this.prismaService.sessions.updateMany({
+    const session = await this.prismaService.sessions.findUnique({
       where: {
-        userId: sub,
-        deviceId: deviceId,
+        userId_deviceId: {
+          userId: sub,
+          deviceId: deviceId,
+        },
+      },
+    });
+
+    const isRememberMe = session?.isRememberMe ?? false;
+    const sessionDuration = isRememberMe
+      ? 30 * 24 * 60 * 60 * 1000
+      : 7 * 24 * 60 * 60 * 1000;
+    const expiresAt = new Date(Date.now() + sessionDuration);
+
+    await this.prismaService.sessions.update({
+      where: {
+        userId_deviceId: {
+          userId: sub,
+          deviceId: deviceId,
+        },
       },
       data: {
         refreshToken: refreshTokenHash,
         userAgent,
         ipAddress,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        expiresAt,
       },
     });
 
     await this.cacheService.set(
       `refresh_token:${sub}:${deviceId}`,
       refreshTokenHash,
-      7 * 24 * 60 * 60
+      sessionDuration / 1000
     );
 
-    return token;
+    return {
+      ...token,
+      refreshTokenExpiresIn: sessionDuration,
+    };
   }
 
   async logout(user: AuthenticatedUser) {
@@ -334,7 +370,7 @@ export class AuthService {
     username: string,
     email: string,
     deviceId: string
-  ): Promise<TokenResponse> {
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     const accessTokenPayload: JwtAccessPayload = {
       sub: userId,
       type: 'access',

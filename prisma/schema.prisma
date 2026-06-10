@@ -83,6 +83,7 @@ model Sessions {
   deviceId     String
   userAgent    String
   ipAddress    String
+  isRememberMe Boolean  @default(false)
   expiresAt    DateTime
   createdAt    DateTime @default(now())
 
